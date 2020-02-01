@@ -109,6 +109,7 @@ class renderer
 		m.col = Color::green;
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, m);
 		m.col = Color::white;
+		m.reflect = 0.9f;
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, m);
 		vec3f lpos(0, 0, -1);
 		//lights.emplace_back(vec3f(-20, 20, 20), 1.5);
@@ -131,7 +132,9 @@ class renderer
 	 
 	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
 	{
-		std::optional<std::pair<hitInfo, color>> lastHit;
+		bool hit = false;
+		std::pair<float, color> lastHit;
+		lastHit.first = std::numeric_limits<float>::max();
 		for (auto const& sphere : spheres)
 		{
 			if (auto const hInfo = sphere.rayIntersect(origin, dir))
@@ -155,20 +158,15 @@ class renderer
 					col = lerp(col, r_color, sphere.mtrl.reflect);
 				}
 				
-				// @TODO fix this shit
-				auto l = (hInfo->pos - camPos).norm();
-				vec3f p;
-				if (!lastHit) {
-					lastHit = std::make_pair(hInfo.value(), col);
-				}
-				auto r = (p - camPos).norm();
-				if (l > r)
-					lastHit = std::make_pair(hInfo.value(), col);
+				float l = (hInfo->pos - camPos).norm();
+				if (l < lastHit.first)
+					lastHit = std::make_pair(l, col);
+				hit = true;
 			}
 		}
-		if (lastHit)
-			return lastHit->second;
-		return Color::black;
+		if (hit)
+			return lastHit.second;
+		return clear_color;
 	}
 
 	void clear(color clearColor = Color::black) noexcept
@@ -192,6 +190,10 @@ class renderer
 		stbi_write_jpg(fileName, width, height, 4, buffer.data(), 100);
 	}
 
+	public:
+	
+	color clear_color = Color::yellow;
+	
 	private:
 
 	unsigned max_depth = 4;
@@ -212,6 +214,7 @@ void vec_print(vec3f const& v)
 int main()
 {
 	renderer render(1280, 720, M_PI/3);
+	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
 	render.initScene();
 	render.render();
 	render.save();
