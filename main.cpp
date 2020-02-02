@@ -15,11 +15,13 @@ using color = vec4f;
 
 namespace Color
 {
-	const color black = { 0.0f, 0.0f, 0.0f, 0.0f };
+	const color black = { 0.0f, 0.0f, 0.0f, 1.0f };
+	const color none = { 0.0f, 0.0f, 0.0f, 0.0f };
 	const color red = { 1.0f, 0, 0, 1.0f };
 	const color blue = { 0, 0, 1.0f, 1.0f };
 	const color green = { 0, 1.0f, 0, 1.0f };
 	const color yellow = { 1.0f, 1.0f, 0, 1.0f };
+	const color orange = { 1.0f, 0.0f, 1.0, 1.0f };
 	const color white = { 1.0f, 1.0f, 1.0f, 1.0f };
 }
 
@@ -33,10 +35,10 @@ struct light
 struct material
 {
 	color col;
-	float specularExponent= 10.f;
-	float ka, kd, ks;
-	vec2f albedo;
+	float kd, ks, kr;
 	float reflect = 0.0f;
+	float refraction_index = 0.0f;
+	float specularExponent = 10.f;
 };
 
 struct hitInfo
@@ -101,23 +103,17 @@ class renderer
 	
 	void initScene()
 	{
-		material m = { Color::yellow , 250.0f };
-		m.kd = 1.0f;
-		m.ks = 0.0f;
-		m.col = Color::blue;
-		spheres.emplace_back(vec3f(7, 5, -18), 4, m);
-		m.col = Color::red;
-		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, m);
-		m.col = Color::green;
-		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, m);
-		m.col = Color::white;
-	//	m.reflect = 0.9f;
-		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, m);
-		spheres.emplace_back(vec3f(-14, -0.5, -20), 5, m);
-		vec3f lpos(0, 0, -1);
-		//lights.emplace_back(vec3f(-20, 20, 20), 1.5);
-		//lights.emplace_back(vec3f(30, 20, 30), 1.0);
-		lights.emplace_back(vec3f(1.5, 1.0, -15), 1.0);
+		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
+		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
+		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
+		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 10.0, 0.0,0.8, 1.0,1425. };
+
+		spheres.emplace_back(vec3f(7, 5, -18), 4, mirror);
+		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
+		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
+		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
+		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
+		lights.emplace_back(vec3f(1.5, 1.0, -8), 1.0);
 	}
 
 	void render() noexcept
@@ -157,10 +153,28 @@ class renderer
 	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
 	{
 		auto hInfo = scene_intersect(origin, dir);
-		if (!hInfo)
+		if (depth > max_depth || !hInfo)
 			return clear_color;
 		
 		float diffuseLightIntensity = 0, specularLightIntensity = 0;
+
+		// reflection
+		color reflect_col = Color::none;
+		if (hInfo->mtrl.reflect > 0.0f)
+		{
+			vec3f r_dir = reflect(dir, hInfo->normal).normalize();
+			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			reflect_col = cast_ray(r_origin, r_dir, depth + 1);
+		}
+
+		// refraction
+		color refract_col = Color::none;
+		if (hInfo->mtrl.refraction_index > 0.0f)
+		{
+			vec3f r_dir = refract(dir, hInfo->normal, hInfo->mtrl.refraction_index);
+			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			refract_col = cast_ray(r_origin, r_dir, depth + 1);
+		}
 		
 		// @TODO fix multiples lights
 		for (auto const& lightIt : lights)
@@ -178,19 +192,9 @@ class renderer
 			diffuseLightIntensity += lightIt.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
 			specularLightIntensity += lightIt.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specularExponent);
 		}
-		color col = hInfo->mtrl.col * (hInfo->mtrl.kd * diffuseLightIntensity + hInfo->mtrl.ks * specularLightIntensity);
-
 		
-		// reflection
-		if (hInfo->mtrl.reflect > 0.0f && depth < max_depth)
-		{
-			vec3f r_dir = reflect(dir, hInfo->normal).normalize();
-			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
-			color r_color = cast_ray(r_origin, r_dir, depth+1);
-			col = lerp(col, r_color, hInfo->mtrl.reflect);
-		}
-		
-		return col;
+		//return hInfo->mtrl.col * (hInfo->mtrl.kd * diffuseLightIntensity) * (hInfo->mtrl.ks * specularLightIntensity);
+		return hInfo->mtrl.col * diffuseLightIntensity * hInfo->mtrl.kd + vec4f(1., 1., 1., 1.) * specularLightIntensity * hInfo->mtrl.ks + reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
 	}
 
 	void clear(color clearColor = Color::black) noexcept
@@ -216,8 +220,8 @@ class renderer
 
 	public:
 	
-	color clear_color = Color::yellow;
-	unsigned max_depth = 4;
+	color clear_color = Color::black;
+	unsigned max_depth = 8;
 	
 	private:
 

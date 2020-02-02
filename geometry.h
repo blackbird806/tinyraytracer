@@ -46,11 +46,11 @@ template <typename T> struct vec<4,T> {
     T x,y,z,w;
 };
 
-template<size_t DIM,typename T> vec<DIM, T> operator*(const vec<DIM,T>& lhs, const vec<DIM,T>& rhs) {
-	vec<DIM, T> ret;
-    for (size_t i=DIM; i--; ret[i] = lhs[i] * rhs[i]);
-    return ret;
-}
+//template<size_t DIM,typename T> vec<DIM, T> operator*(const vec<DIM,T>& lhs, const vec<DIM,T>& rhs) {
+//	vec<DIM, T> ret;
+//    for (size_t i=DIM; i--; ret[i] = lhs[i] * rhs[i]);
+//    return ret;
+//}
 
 template<size_t DIM,typename T>vec<DIM,T> operator+(vec<DIM,T> lhs, const vec<DIM,T>& rhs) {
     for (size_t i=DIM; i--; lhs[i]+=rhs[i]);
@@ -100,6 +100,25 @@ inline float angle(vec3f const& lhs, vec3f const& rhs)
 inline vec3f reflect(vec3f const& v, vec3f const& n)
 {
     return v - 2 * dot(v, n) * n;
+}
+
+inline vec3f refract(vec3f const& v, vec3f const& n, float refractive_index)
+{
+    float cosi = -std::max(-1.0f, std::min(1.0f, dot(v, n)));
+    float etai = 1, etat = refractive_index;
+
+	vec3f N = n;
+	if (cosi < 0)
+	{
+        cosi = -cosi;
+        std::swap(etai, etat);
+        N = -n;
+	}
+
+	float eta = etai / etat;
+    float k = 1 - eta * eta * (1 - cosi * cosi);
+
+    return k < 0 ? vec3f(0, 0, 0) : v * eta + N * (eta * cosi - sqrtf(k));
 }
 
 template<typename T>
