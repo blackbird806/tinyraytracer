@@ -30,20 +30,21 @@ struct light
 	float intensity;
 };
 
+struct material
+{
+	color col;
+	float specularExponent= 10.f;
+	float ka, kd, ks;
+	vec2f albedo;
+	float reflect = 0.0f;
+};
+
 struct hitInfo
 {
 	vec3f pos;
 	vec3f normal;
 	vec3f tangent;
-};
-
-struct material
-{
-	color col;
-	float specularExponent= 10.f;
-	float kd, ks;
-	vec2f albedo;
-	float reflect = 0.0f;
+	material mtrl;
 };
 
 struct drawable
@@ -84,6 +85,7 @@ struct sphere : drawable
 		float t = t0;
 		hinfo.pos = origin + dir * t;
 		hinfo.normal = (hinfo.pos - pos).normalize();
+		hinfo.mtrl = mtrl;
 		return hinfo;
 	}
 };
@@ -105,15 +107,17 @@ class renderer
 		m.col = Color::blue;
 		spheres.emplace_back(vec3f(7, 5, -18), 4, m);
 		m.col = Color::red;
-		spheres.emplace_back(vec3f(-3, 0, -16), 2, m);
+		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, m);
 		m.col = Color::green;
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, m);
 		m.col = Color::white;
-		m.reflect = 0.9f;
+	//	m.reflect = 0.9f;
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, m);
+		spheres.emplace_back(vec3f(-14, -0.5, -20), 5, m);
 		vec3f lpos(0, 0, -1);
 		//lights.emplace_back(vec3f(-20, 20, 20), 1.5);
-		lights.emplace_back(vec3f(30, 20, 30), 1.0);
+		//lights.emplace_back(vec3f(30, 20, 30), 1.0);
+		lights.emplace_back(vec3f(1.5, 1.0, -15), 1.0);
 	}
 
 	void render() noexcept
@@ -129,44 +133,64 @@ class renderer
 			}
 		}
 	}
-	 
-	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
+
+	// return the closest hitpoint 
+	[[nodiscard]] std::optional<hitInfo> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
 	{
-		bool hit = false;
-		std::pair<float, color> lastHit;
-		lastHit.first = std::numeric_limits<float>::max();
+		std::optional<hitInfo> result;
+		float dist = std::numeric_limits<float>::max();
 		for (auto const& sphere : spheres)
 		{
 			if (auto const hInfo = sphere.rayIntersect(origin, dir))
 			{
-				float diffuseLightIntensity = 0, specularLightIntensity = 0;
-				// @TODO fix multiples lights
-				for (auto const& lightIt : lights)
+				float const c_dist = (hInfo->pos - origin).norm2();
+				if (c_dist < dist)
 				{
-					vec3f const lightDir = (lightIt.pos - hInfo->pos).normalize();
-					vec3f R = reflect(-lightDir, hInfo->normal);
-					float S = dot(camDir, R);
-					diffuseLightIntensity += lightIt.intensity * std::max(0.0f, dot(lightDir, hInfo->normal));
-					specularLightIntensity += lightIt.intensity * std::pow(std::max(0.0f, dot(R, -dir)), sphere.mtrl.specularExponent);
+					dist = c_dist;
+					result = hInfo;
 				}
-				color col = sphere.mtrl.col * (sphere.mtrl.kd * diffuseLightIntensity + sphere.mtrl.ks * specularLightIntensity);
-				if (sphere.mtrl.reflect > 0.0f && depth < max_depth)
-				{
-					vec3f r_dir = reflect(dir, hInfo->normal).normalize();
-					vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
-					color r_color = cast_ray(r_origin, r_dir, depth+1);
-					col = lerp(col, r_color, sphere.mtrl.reflect);
-				}
-				
-				float l = (hInfo->pos - camPos).norm();
-				if (l < lastHit.first)
-					lastHit = std::make_pair(l, col);
-				hit = true;
 			}
 		}
-		if (hit)
-			return lastHit.second;
-		return clear_color;
+		return result;
+	}
+	 
+	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
+	{
+		auto hInfo = scene_intersect(origin, dir);
+		if (!hInfo)
+			return clear_color;
+		
+		float diffuseLightIntensity = 0, specularLightIntensity = 0;
+		
+		// @TODO fix multiples lights
+		for (auto const& lightIt : lights)
+		{
+			vec3f const light_dir = (lightIt.pos - hInfo->pos).normalize();
+			vec3f const R = reflect(-light_dir, hInfo->normal);
+
+			// shadows
+			vec3f const shadow_start = dot(light_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;;
+			if (scene_intersect(shadow_start, light_dir))
+			{
+				continue;
+			}
+			
+			diffuseLightIntensity += lightIt.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
+			specularLightIntensity += lightIt.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specularExponent);
+		}
+		color col = hInfo->mtrl.col * (hInfo->mtrl.kd * diffuseLightIntensity + hInfo->mtrl.ks * specularLightIntensity);
+
+		
+		// reflection
+		if (hInfo->mtrl.reflect > 0.0f && depth < max_depth)
+		{
+			vec3f r_dir = reflect(dir, hInfo->normal).normalize();
+			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			color r_color = cast_ray(r_origin, r_dir, depth+1);
+			col = lerp(col, r_color, hInfo->mtrl.reflect);
+		}
+		
+		return col;
 	}
 
 	void clear(color clearColor = Color::black) noexcept
@@ -193,10 +217,10 @@ class renderer
 	public:
 	
 	color clear_color = Color::yellow;
+	unsigned max_depth = 4;
 	
 	private:
 
-	unsigned max_depth = 4;
 	std::vector<sphere> spheres;
 	std::vector<light> lights;
 	std::vector<color> image;
