@@ -38,7 +38,7 @@ struct material
 	float kd, ks, kr;
 	float reflect = 0.0f;
 	float refraction_index = 0.0f;
-	float specularExponent = 10.f;
+	float specular_exponent = 10.f;
 };
 
 struct hitInfo
@@ -62,7 +62,7 @@ struct sphere : drawable
 	sphere(vec3f const& p, float r, color const& c = Color::green) noexcept : drawable{ material{c} }, pos(p), radius(r) {};
 	sphere(vec3f const& p, float r, material const& m ) noexcept : drawable{m}, pos(p), radius(r) {};
 
-	[[nodiscard]] std::optional<hitInfo> rayIntersect(vec3f const& origin, vec3f dir) const noexcept
+	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f dir) const noexcept
 	{
 		hitInfo hinfo;
 		vec3f const f = origin - pos;
@@ -101,7 +101,7 @@ class renderer
 		clear();
 	}
 	
-	void initScene()
+	void init_scene()
 	{
 		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
 		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
@@ -137,7 +137,7 @@ class renderer
 		float dist = std::numeric_limits<float>::max();
 		for (auto const& sphere : spheres)
 		{
-			if (auto const hInfo = sphere.rayIntersect(origin, dir))
+			if (auto const hInfo = sphere.ray_intersect(origin, dir))
 			{
 				float const c_dist = (hInfo->pos - origin).norm2();
 				if (c_dist < dist)
@@ -156,7 +156,7 @@ class renderer
 		if (depth > max_depth || !hInfo)
 			return clear_color;
 		
-		float diffuseLightIntensity = 0, specularLightIntensity = 0;
+		float diffuse_light_intensity = 0, specular_light_intensity = 0;
 
 		// reflection
 		color reflect_col = Color::none;
@@ -177,9 +177,9 @@ class renderer
 		}
 		
 		// @TODO fix multiples lights
-		for (auto const& lightIt : lights)
+		for (auto const& light_it : lights)
 		{
-			vec3f const light_dir = (lightIt.pos - hInfo->pos).normalize();
+			vec3f const light_dir = (light_it.pos - hInfo->pos).normalize();
 			vec3f const R = reflect(-light_dir, hInfo->normal);
 
 			// shadows
@@ -189,16 +189,16 @@ class renderer
 				continue;
 			}
 			
-			diffuseLightIntensity += lightIt.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
-			specularLightIntensity += lightIt.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specularExponent);
+			diffuse_light_intensity += light_it.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
+			specular_light_intensity += light_it.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specular_exponent);
 		}
 		
-		return hInfo->mtrl.col * diffuseLightIntensity * hInfo->mtrl.kd + vec4f(1., 1., 1., 1.) * specularLightIntensity * hInfo->mtrl.ks + reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
+		return hInfo->mtrl.col * diffuse_light_intensity * hInfo->mtrl.kd + vec4f(1., 1., 1., 1.) * specular_light_intensity * hInfo->mtrl.ks + reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
 	}
 
-	void clear(color clearColor = Color::black) noexcept
+	void clear(color c_color = Color::black) noexcept
 	{
-		std::fill(image.begin(), image.end(), clearColor);
+		std::fill(image.begin(), image.end(), c_color);
 	}
 
 	void save(const char* fileName = "out.jpg") const noexcept
@@ -237,7 +237,7 @@ int main()
 {
 	renderer render(1280, 720, M_PI/3);
 	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
-	render.initScene();
+	render.init_scene();
 	render.render();
 	render.save();
 	return 0;
