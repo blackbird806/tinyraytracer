@@ -84,7 +84,7 @@ struct sphere : drawable
 			t0 = t1; // if t0 is negative, let's use t1 instead 
 			if (t0 < 0) return {}; // both t0 and t1 are negative
 		}
-		float t = t0;
+		float const t = t0;
 		hinfo.pos = origin + dir * t;
 		hinfo.normal = (hinfo.pos - pos).normalize();
 		hinfo.mtrl = mtrl;
@@ -152,7 +152,7 @@ class renderer
 	 
 	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
 	{
-		auto hInfo = scene_intersect(origin, dir);
+		auto const hInfo = scene_intersect(origin, dir);
 		if (depth > max_depth || !hInfo)
 			return clear_color;
 		
@@ -162,8 +162,8 @@ class renderer
 		color reflect_col = Color::none;
 		if (hInfo->mtrl.reflect > 0.0f)
 		{
-			vec3f r_dir = reflect(dir, hInfo->normal).normalize();
-			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			vec3f const r_dir = reflect(dir, hInfo->normal).normalize();
+			vec3f const r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
 			reflect_col = cast_ray(r_origin, r_dir, depth + 1);
 		}
 
@@ -171,8 +171,8 @@ class renderer
 		color refract_col = Color::none;
 		if (hInfo->mtrl.refraction_index > 0.0f)
 		{
-			vec3f r_dir = refract(dir, hInfo->normal, hInfo->mtrl.refraction_index);
-			vec3f r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			vec3f const r_dir = refract(dir, hInfo->normal, hInfo->mtrl.refraction_index);
+			vec3f const r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
 			refract_col = cast_ray(r_origin, r_dir, depth + 1);
 		}
 		
@@ -193,7 +193,6 @@ class renderer
 			specularLightIntensity += lightIt.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specularExponent);
 		}
 		
-		//return hInfo->mtrl.col * (hInfo->mtrl.kd * diffuseLightIntensity) * (hInfo->mtrl.ks * specularLightIntensity);
 		return hInfo->mtrl.col * diffuseLightIntensity * hInfo->mtrl.kd + vec4f(1., 1., 1., 1.) * specularLightIntensity * hInfo->mtrl.ks + reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
 	}
 
@@ -233,11 +232,6 @@ class renderer
 	vec3f camPos;
 	vec3f camDir;
 };
-
-void vec_print(vec3f const& v)
-{
-	std::cout << "x: " << v.x << " y: " << v.y << " z: " << v.z << "\n";
-}
 
 int main()
 {
