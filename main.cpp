@@ -108,7 +108,8 @@ class renderer
 		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
 		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 10.0, 0.0,0.8, 1.0,1425. };
 
-		spheres.emplace_back(vec3f(7, 5, -18), 4, mirror);
+		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
+		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
 		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
