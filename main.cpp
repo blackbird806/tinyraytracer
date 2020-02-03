@@ -61,7 +61,7 @@ struct sphere : drawable
 	sphere(vec3f const& p, float r, color const& c = Color::green) noexcept : drawable{ material{c} }, pos(p), radius(r) {}
 	sphere(vec3f const& p, float r, material const& m) noexcept : drawable{m}, pos(p), radius(r) {}
 
-	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f dir) const noexcept
+	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
 	{
 		hitInfo hinfo;
 		vec3f const f = origin - pos;
@@ -95,9 +95,8 @@ struct plan : drawable
 {
 	plan(vec3f const& p, vec3f const& n, material const& m) noexcept  : drawable{m}, pos(p), normal(n) { }
 
-	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f dir) const noexcept
+	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
 	{
-		// not sure why I need to return the inverse of the normal
 		float const d = dot(-normal, dir);
 		if (d > FLT_EPSILON)
 		{
@@ -135,7 +134,7 @@ class renderer
 		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
 		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
 		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
-		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.15, 1.0,10. };
+		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
 		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 10.0, 0.0,0.8, 1.0,1425. };
 
 		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
@@ -144,9 +143,9 @@ class renderer
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
 		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		//plans.emplace_back(vec3f(0, -5, 0), vec3f(0, -1, 0), ivory);
-		plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), blue_rubber);
-		lights.emplace_back(vec3f(-3, -1, -10), 0.8);
+		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), mirror);
+		//plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), ivory);
+		//lights.emplace_back(vec3f(-3, -1, -10), 0.8);
 		lights.emplace_back(vec3f(0, 0, 0), 1.0);
 	}
 
@@ -181,7 +180,7 @@ class renderer
 				}
 			}
 		}
-
+		
 		for (auto const& plan : plans)
 		{
 			if (auto const hInfo = plan.ray_intersect(origin, dir))
@@ -217,7 +216,7 @@ class renderer
 		color refract_col = Color::none;
 		if (hInfo->mtrl.refraction_index > 0.0f)
 		{
-			vec3f const r_dir = refract(dir, hInfo->normal, hInfo->mtrl.refraction_index);
+			vec3f const r_dir = refract(dir, hInfo->normal, hInfo->mtrl.refraction_index).normalize();
 			vec3f const r_origin = dot(r_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
 			refract_col = cast_ray(r_origin, r_dir, depth + 1);
 		}
@@ -227,14 +226,16 @@ class renderer
 		for (auto const& light_it : lights)
 		{
 			vec3f const light_dir = (light_it.pos - hInfo->pos).normalize();
-			vec3f const R = reflect(-light_dir, hInfo->normal);
-
+			
 			// shadows
-			vec3f const shadow_start = dot(light_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;;
-			if (scene_intersect(shadow_start, light_dir))
+			vec3f const shadow_start = dot(light_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
+			if (auto const& shadow_hit = scene_intersect(shadow_start, light_dir))
 			{
-				continue;
+				if ((shadow_start - shadow_hit->pos).norm2() <= (shadow_start - light_it.pos).norm2())
+					continue;
 			}
+			
+			vec3f const R = reflect(-light_dir, hInfo->normal).normalize();
 			
 			diffuse_light_intensity += light_it.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
 			specular_light_intensity += light_it.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specular_exponent);
