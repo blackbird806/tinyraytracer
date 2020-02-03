@@ -45,7 +45,6 @@ struct hitInfo
 {
 	vec3f pos;
 	vec3f normal;
-	vec3f tangent;
 	material mtrl;
 };
 
@@ -59,8 +58,8 @@ struct sphere : drawable
 	vec3f pos;
 	float radius;
 
-	sphere(vec3f const& p, float r, color const& c = Color::green) noexcept : drawable{ material{c} }, pos(p), radius(r) {};
-	sphere(vec3f const& p, float r, material const& m ) noexcept : drawable{m}, pos(p), radius(r) {};
+	sphere(vec3f const& p, float r, color const& c = Color::green) noexcept : drawable{ material{c} }, pos(p), radius(r) {}
+	sphere(vec3f const& p, float r, material const& m) noexcept : drawable{m}, pos(p), radius(r) {}
 
 	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f dir) const noexcept
 	{
@@ -92,6 +91,36 @@ struct sphere : drawable
 	}
 };
 
+struct plan : drawable
+{
+	plan(vec3f const& p, vec3f const& n, material const& m) noexcept  : drawable{m}, pos(p), normal(n) { }
+
+	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f dir) const noexcept
+	{
+		// not sure why I need to return the inverse of the normal
+		float const d = dot(-normal, dir);
+		if (d > FLT_EPSILON)
+		{
+			vec3f const p = pos - origin;
+			float const t = dot(p, -normal) / d;
+			
+			if (t < 0)
+				return {};
+			
+			hitInfo result;
+			result.pos = origin + dir * t;
+			result.normal = normal;
+			result.mtrl = mtrl;
+
+			return {result};
+		}
+		return {};
+	}
+	
+	vec3f pos;
+	vec3f normal;
+};
+
 class renderer
 {
 	public:
@@ -106,6 +135,7 @@ class renderer
 		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
 		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
 		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
+		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.15, 1.0,10. };
 		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 10.0, 0.0,0.8, 1.0,1425. };
 
 		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
@@ -114,7 +144,10 @@ class renderer
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
 		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		lights.emplace_back(vec3f(1.5, 1.0, -8), 1.0);
+		//plans.emplace_back(vec3f(0, -5, 0), vec3f(0, -1, 0), ivory);
+		plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), blue_rubber);
+		lights.emplace_back(vec3f(-3, -1, -10), 0.8);
+		lights.emplace_back(vec3f(0, 0, 0), 1.0);
 	}
 
 	void render() noexcept
@@ -148,6 +181,20 @@ class renderer
 				}
 			}
 		}
+
+		for (auto const& plan : plans)
+		{
+			if (auto const hInfo = plan.ray_intersect(origin, dir))
+			{
+				float const c_dist = (hInfo->pos - origin).norm2();
+				if (c_dist < dist)
+				{
+					dist = c_dist;
+					result = hInfo;
+				}
+			}
+		}
+		
 		return result;
 	}
 	 
@@ -156,8 +203,6 @@ class renderer
 		auto const hInfo = scene_intersect(origin, dir);
 		if (depth > max_depth || !hInfo)
 			return clear_color;
-		
-		float diffuse_light_intensity = 0, specular_light_intensity = 0;
 
 		// reflection
 		color reflect_col = Color::none;
@@ -177,7 +222,8 @@ class renderer
 			refract_col = cast_ray(r_origin, r_dir, depth + 1);
 		}
 		
-		// @TODO fix multiples lights
+		float diffuse_light_intensity = 0, specular_light_intensity = 0;
+
 		for (auto const& light_it : lights)
 		{
 			vec3f const light_dir = (light_it.pos - hInfo->pos).normalize();
@@ -225,7 +271,9 @@ class renderer
 	
 	private:
 
+	std::vector<plan> plans;
 	std::vector<sphere> spheres;
+	
 	std::vector<light> lights;
 	std::vector<color> image;
 	size_t width, height;
