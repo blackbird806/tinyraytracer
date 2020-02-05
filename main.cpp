@@ -128,40 +128,6 @@ class renderer
 	{
 		clear();
 	}
-	
-	void init_scene()
-	{
-		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
-		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
-		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
-		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
-		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 10.0, 0.0,0.8, 1.0,1425. };
-
-		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
-		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
-		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
-		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
-		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
-		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), mirror);
-		//plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), ivory);
-		//lights.emplace_back(vec3f(-3, -1, -10), 0.8);
-		lights.emplace_back(vec3f(0, 0, 0), 1.0);
-	}
-
-	void render() noexcept
-	{
-		for (size_t i = 0; i < height; i++)
-		{
-			for (size_t j = 0; j < width; j++)
-			{
-				float const x = (2 * (j + 0.5) / (float)width - 1) * tan(fov / 2.0) * width / (float)height;
-				float const y = -(2 * (i + 0.5) / (float)height - 1) * tan(fov / 2.0);
-				vec3f const dir = vec3f(x, y, -1).normalize();
-				image[j + i * width] = cast_ray(vec3f(0, 0, 0), dir);
-			}
-		}
-	}
 
 	// return the closest hitpoint 
 	[[nodiscard]] std::optional<hitInfo> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
@@ -249,6 +215,50 @@ class renderer
 		std::fill(image.begin(), image.end(), c_color);
 	}
 
+	void init_scene()
+	{
+		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
+		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
+		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
+		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
+		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
+
+		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
+		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
+		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
+		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
+		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
+		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
+		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), mirror);
+		//plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), ivory);
+		//lights.emplace_back(vec3f(-3, -1, -10), 0.8);
+		lights.emplace_back(vec3f(0, 0, 0), 1.0);
+	}
+
+	void render() noexcept
+	{
+		float const tf2 = tanf(fov / 2.0f);
+		#pragma loop(hint_parallel(8))
+		for (size_t i = 0; i < height; i++)
+		{
+			for (size_t j = 0; j < width; j++)
+			{
+				for (unsigned m = 0; m < msaa; m++)
+				{
+					float const sample_offset = std::min(.5f, (float)m / (msaa / 2));
+					float const x = (2 * (j + sample_offset) / (float)width - 1) * tf2 * width / (float)height;
+					float const y = -(2 * (i + sample_offset) / (float)height - 1) * tf2;
+					vec3f const dir = vec3f(x, y, -1).normalize();
+					image[j + i * width] = image[j + i * width] + cast_ray(vec3f(0, 0, 0), dir);
+				}
+				image[j + i * width].x /= msaa;
+				image[j + i * width].y /= msaa;
+				image[j + i * width].z /= msaa;
+				image[j + i * width].w /= msaa;
+			}
+		}
+	}
+	
 	void save(const char* fileName = "out.jpg") const noexcept
 	{
 		struct color8bit {
@@ -269,6 +279,7 @@ class renderer
 	
 	color clear_color = Color::black;
 	unsigned max_depth = 8;
+	unsigned msaa = 1;
 	
 	private:
 
