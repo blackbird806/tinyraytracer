@@ -1,11 +1,12 @@
 #include <limits>
+
 #define _USE_MATH_DEFINES
 #include <cmath>
-#include <iostream>
 #include <vector>
 #include <algorithm>
 #include <optional>
 #include "geometry.h"
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
@@ -231,7 +232,7 @@ class renderer
 		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
 		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), mirror);
 		//plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), ivory);
-		//lights.emplace_back(vec3f(-3, -1, -10), 0.8);
+		lights.emplace_back(vec3f(-3, -1, -10), 0.8);
 		lights.emplace_back(vec3f(0, 0, 0), 1.0);
 	}
 
@@ -245,7 +246,7 @@ class renderer
 			{
 				for (unsigned m = 0; m < msaa; m++)
 				{
-					float const sample_offset = std::min(.5f, (float)m / (msaa / 2));
+					float const sample_offset = msaa > 1 ? (float)m / (msaa / 2) : 0.5f;
 					float const x = (2 * (j + sample_offset) / (float)width - 1) * tf2 * width / (float)height;
 					float const y = -(2 * (i + sample_offset) / (float)height - 1) * tf2;
 					vec3f const dir = vec3f(x, y, -1).normalize();
@@ -279,7 +280,7 @@ class renderer
 	
 	color clear_color = Color::black;
 	unsigned max_depth = 8;
-	unsigned msaa = 1;
+	unsigned msaa = 8;
 	
 	private:
 
