@@ -10,6 +10,10 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#ifdef __GNUC__
+	#define FLT_EPSILON __FLT_EPSILON__
+#endif
+
 #define NOP [](){}()
 
 using color = vec4f;
