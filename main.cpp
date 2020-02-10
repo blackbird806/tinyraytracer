@@ -31,12 +31,13 @@ struct light
 	light(vec3f p, float in) noexcept : pos(p), intensity(in) {};
 	vec3f pos;
 	float intensity;
+	static constexpr float ambient = 0.0;
 };
 
 struct material
 {
 	color col;
-	float kd, ks, kr;
+	float ka, kd, ks, kr;
 	float reflect = 0.0f;
 	float refraction_index = 0.0f;
 	float specular_exponent = 10.f;
@@ -127,7 +128,6 @@ class renderer
 
 	renderer(size_t iwidth, size_t iheight, float ifov) noexcept : image(iwidth * iheight), width(iwidth), height(iheight), fov(ifov)
 	{
-		clear();
 	}
 
 	// return the closest hitpoint 
@@ -189,7 +189,6 @@ class renderer
 		}
 		
 		float diffuse_light_intensity = 0, specular_light_intensity = 0;
-
 		for (auto const& light_it : lights)
 		{
 			vec3f const light_dir = (light_it.pos - hInfo->pos).normalize();
@@ -203,26 +202,25 @@ class renderer
 			}
 			
 			vec3f const R = reflect(-light_dir, hInfo->normal).normalize();
-			
+
 			diffuse_light_intensity += light_it.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
 			specular_light_intensity += light_it.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specular_exponent);
 		}
 		
-		return hInfo->mtrl.col * diffuse_light_intensity * hInfo->mtrl.kd + vec4f(1., 1., 1., 1.) * specular_light_intensity * hInfo->mtrl.ks + reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
-	}
-
-	void clear(color c_color = Color::black) noexcept
-	{
-		std::fill(image.begin(), image.end(), c_color);
+		return	hInfo->mtrl.col * hInfo->mtrl.ka * light::ambient +
+				hInfo->mtrl.col * diffuse_light_intensity * hInfo->mtrl.kd +
+				vec4f(1., 1., 1., 1.) * specular_light_intensity * hInfo->mtrl.ks + 
+				reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
 	}
 
 	void init_scene()
 	{
-		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f}, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
-		material      glass = { color{0.6,  0.7, 0.8, 1.0f}, 0.0, 0.5, 0.8, 0.1, 1.5,125. };
-		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f}, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
-		material blue_rubber = { color{0.1,  0.1, 0.4, 1.0f}, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
-		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f}, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
+		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f},	0.15, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
+		material      glass = { color{0.6,  0.7, 0.8, 1.0f},	0.15, 0.0, 0.5, 0.8, 0.0, 1.5,125. };
+		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f},	0.15, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
+		material blue_rubber = { color{0.1,  0.1, 0.6, 1.0f},	0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
+		material yellow_rubber = { color{0.4,  0.4, 0.1, 1.0f}, 0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
+		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f},	0.15, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
 
 		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
 		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
@@ -230,10 +228,12 @@ class renderer
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
 		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), mirror);
-		//plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), ivory);
-		lights.emplace_back(vec3f(-3, -1, -10), 0.8);
-		lights.emplace_back(vec3f(0, 0, 0), 1.0);
+		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), yellow_rubber);
+		plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), blue_rubber);
+		
+		lights.emplace_back(vec3f(-20, 20, 20), 1.5);
+		lights.emplace_back(vec3f(30, 50, -25), 1.8);
+		lights.emplace_back(vec3f(30, 20, 30), 1.7);
 	}
 
 	void render() noexcept
@@ -280,7 +280,7 @@ class renderer
 	
 	color clear_color = Color::black;
 	unsigned max_depth = 8;
-	unsigned msaa = 8;
+	unsigned msaa = 1;
 	
 	private:
 
