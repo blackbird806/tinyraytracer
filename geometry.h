@@ -40,6 +40,8 @@ template <typename T> struct vec<3,T> {
 template <typename T> struct vec<4,T> {
     vec() : x(T()), y(T()), z(T()), w(T()) {}
     vec(T X, T Y, T Z, T W) : x(X), y(Y), z(Z), w(W) {}
+	float norm() const { return std::sqrt(x * x + y * y + z * z + w * w); }
+	float norm2() const { return (x * x + y * y + z * z + w * w); }
           T& operator[](const size_t i)       { assert(i<4); return i<=0 ? x : (1==i ? y : (2==i ? z : w)); }
     const T& operator[](const size_t i) const { assert(i<4); return i<=0 ? x : (1==i ? y : (2==i ? z : w)); }
     T x,y,z,w;

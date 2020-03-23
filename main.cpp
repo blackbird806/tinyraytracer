@@ -9,6 +9,8 @@
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
 
 #define NOP [](){}()
 
@@ -25,6 +27,31 @@ namespace Color
 	const color orange = { 1.0f, 0.0f, 1.0, 1.0f };
 	const color white = { 1.0f, 1.0f, 1.0f, 1.0f };
 }
+
+struct texture
+{
+	int width, height;
+	std::vector<vec3f> data;
+	
+	void load(const char* path) noexcept
+	{
+		int r = -1;
+		stbi_uc* pixmap = stbi_load(path, &width, &height, &r, 0);
+		if (!pixmap || 3 != r)
+			std::cerr << "texture load error : " <<  r;
+		
+		data.resize(width * height);
+		for (int j = height - 1; j >= 0; j--) 
+		{
+			for (int i = 0; i < width; i++) 
+			{
+				data[i + j * width] = vec3f(pixmap[(i + j * width) * 3 + 0], pixmap[(i + j * width) * 3 + 1], pixmap[(i + j * width) * 3 + 2]) * (1 / 255.);
+			}
+		}
+		stbi_image_free(pixmap);
+	}
+
+};
 
 struct light
 {
@@ -95,7 +122,7 @@ struct sphere : drawable
 
 struct plan : drawable
 {
-	plan(vec3f const& p, vec3f const& n, material const& m) noexcept  : drawable{m}, pos(p), normal(n) { }
+	plan(vec3f const& p, vec3f const& n, material const& m) noexcept : drawable{m}, pos(p), normal(n) { }
 
 	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
 	{
@@ -126,8 +153,10 @@ class renderer
 {
 	public:
 
-	renderer(size_t iwidth, size_t iheight, float ifov) noexcept : image(iwidth * iheight), width(iwidth), height(iheight), fov(ifov)
+	renderer(size_t iwidth, size_t iheight, float ifov, const char* env_map_path) noexcept
+	: image(iwidth * iheight), width(iwidth), height(iheight), fov(ifov)
 	{
+		env_map.load(env_map_path);
 	}
 
 	// return the closest hitpoint 
@@ -168,7 +197,7 @@ class renderer
 	{
 		auto const hInfo = scene_intersect(origin, dir);
 		if (depth > max_depth || !hInfo)
-			return clear_color;
+			return get_env_map_color(origin, dir);
 
 		// reflection
 		color reflect_col = Color::none;
@@ -213,27 +242,25 @@ class renderer
 				reflect_col * hInfo->mtrl.reflect + hInfo->mtrl.kr * refract_col;
 	}
 
-	void init_scene()
+	void init_scene() noexcept
 	{
-		material      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f},	0.15, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
-		material      glass = { color{0.6,  0.7, 0.8, 1.0f},	0.15, 0.0, 0.5, 0.8, 0.0, 1.5,125. };
-		material red_rubber = { color{0.3,  0.1, 0.1, 1.0f},	0.15, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
-		material blue_rubber = { color{0.1,  0.1, 0.6, 1.0f},	0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
-		material yellow_rubber = { color{0.4,  0.4, 0.1, 1.0f}, 0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
-		material     mirror = { color{ 1.0, 1.0, 1.0, 1.0f},	0.15, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
-
+		material const      ivory = { color{0.4f, 0.4f, 0.3f, 1.0f},	0.15, 0.6, 0.3, 0.0, 0.1, 1.0,50. };
+		material const      glass = { color{0.6,  0.7, 0.8, 1.0f},	0.15, 0.0, 0.5, 0.8, 0.0, 1.5,125. };
+		material const red_rubber = { color{0.3,  0.1, 0.1, 1.0f},	0.15, 0.9, 0.1, 0.0, 0.0, 1.0,10. };
+		material const blue_rubber = { color{0.1,  0.1, 0.6, 1.0f},	0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
+		material const yellow_rubber = { color{0.4,  0.4, 0.1, 1.0f}, 0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
+		material const     mirror = { color{ 1.0, 1.0, 1.0, 1.0f},	0.15, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
 		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
 		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
 		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
 		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
 		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
 		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		plans.emplace_back(vec3f(0, -5, 0), vec3f(0, 1, 0), yellow_rubber);
-		plans.emplace_back(vec3f(0, 0, -30), vec3f(0, 0, 1), blue_rubber);
-		
+		//plans.emplace_back(vec3f(0, -10, 0), vec3f(0, 1, 0), blue_rubber);
+
 		lights.emplace_back(vec3f(-20, 20, 20), 1.5);
 		lights.emplace_back(vec3f(30, 50, -25), 1.8);
-		lights.emplace_back(vec3f(30, 20, 30), 1.7);
+		lights.emplace_back(vec3f(0, 0, 0), 1.7);
 	}
 
 	void render() noexcept
@@ -246,16 +273,65 @@ class renderer
 			{
 				for (unsigned m = 0; m < msaa; m++)
 				{
-					float const sample_offset = msaa > 1 ? (float)m / (msaa / 2) : 0.5f;
-					float const x = (2 * (j + sample_offset) / (float)width - 1) * tf2 * width / (float)height;
-					float const y = -(2 * (i + sample_offset) / (float)height - 1) * tf2;
+					float const sample_offset = msaa > 1 ? static_cast<float>(m) / (msaa / 2) : 0.5f;
+					float const x = (2 * (j + sample_offset) / static_cast<float>(width) - 1) * tf2 * width / static_cast<float>(height);
+					float const y = -(2 * (i + sample_offset) / static_cast<float>(height) - 1) * tf2;
 					vec3f const dir = vec3f(x, y, -1).normalize();
 					image[j + i * width] = image[j + i * width] + cast_ray(vec3f(0, 0, 0), dir);
 				}
-				image[j + i * width].x /= msaa;
-				image[j + i * width].y /= msaa;
-				image[j + i * width].z /= msaa;
-				image[j + i * width].w /= msaa;
+				image[j + i * width].x /= static_cast<float>(msaa);
+				image[j + i * width].y /= static_cast<float>(msaa);
+				image[j + i * width].z /= static_cast<float>(msaa);
+				image[j + i * width].w /= static_cast<float>(msaa);
+			}
+		}
+	}
+
+	color get_env_map_color(vec3f origin, vec3f dir) const noexcept
+	{
+		float const theta = atan2(dir.z, dir.x);
+		float const phi = -atan2(dir.y, sqrt(dir.z * dir.z + dir.x * dir.x));
+
+		size_t const x = std::max(std::min((theta + M_PI) / (M_PI * 2) * static_cast<double>(env_map.width), static_cast<double>(env_map.width)), 0.0);
+		size_t const y = std::max(std::min((phi + M_PI) / (M_PI * 2) * static_cast<double>(env_map.height), static_cast<double>(env_map.height)), 0.0);
+
+		vec3f const col = env_map.data.at(y * env_map.width + x);
+		return color{ col.x, col.y, col.z, 1.0f} ;
+	}
+
+	void game_boy_pass() noexcept
+	{
+		float const l1 = 0.9;
+		float const l2 = 0.7;
+		float const l3 = 0.5;
+		
+		for(auto& c : image)
+		{
+			float const n = c.norm();
+			if (n > l1)
+			{
+				c.x = 0.607;
+				c.y = 0.737;
+				c.z = 0.058;
+			}
+			else if (n > l2)
+			{
+				c.x = 0.545;
+				c.y = 0.674;
+				c.z = 0.058;
+
+			}
+			else if (n > l3)
+			{
+				c.x = 0.188;
+				c.y = 0.384;
+				c.z = 0.188;
+			}
+			else
+			{
+				c.x = 0.058;
+				c.y = 0.219;
+				c.z = 0.058;
 			}
 		}
 	}
@@ -265,6 +341,7 @@ class renderer
 		struct color8bit {
 			uint8_t r, g, b, a;
 		};
+		
 		std::vector<color8bit> buffer(image.size());
 		for (size_t i = 0; i < buffer.size(); i++)
 		{
@@ -273,17 +350,18 @@ class renderer
 			buffer[i].b = std::min<int>(image[i].z * 255, 255);
 			buffer[i].a = std::min<int>(image[i].w * 255, 255);
 		}
+
 		stbi_write_jpg(fileName, width, height, 4, buffer.data(), 100);
 	}
 
-	public:
-	
 	color clear_color = Color::black;
 	unsigned max_depth = 8;
 	unsigned msaa = 1;
 	
 	private:
 
+	texture env_map;
+	
 	std::vector<plan> plans;
 	std::vector<sphere> spheres;
 	
@@ -297,10 +375,12 @@ class renderer
 
 int main()
 {
-	renderer render(1280, 720, M_PI/3);
+	renderer render(1280, 720, M_PI/3, "envmap.jpg");
 	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
 	render.init_scene();
 	render.render();
 	render.save();
+	render.game_boy_pass();
+	render.save("out gameboy.jpg");
 	return 0;
 }

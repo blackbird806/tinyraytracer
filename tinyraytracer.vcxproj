@@ -76,6 +76,7 @@
       <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
       <Optimization>Disabled</Optimization>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
     <Link>
       <TargetMachine>MachineX86</TargetMachine>
@@ -105,6 +106,7 @@
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <ClCompile>
       <LanguageStandard>stdcpp17</LanguageStandard>
+      <ExceptionHandling>false</ExceptionHandling>
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -120,6 +122,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="geometry.h" />
+    <ClInclude Include="stb_image.h" />
     <ClInclude Include="stb_image_write.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
