@@ -5,6 +5,7 @@
 #include <vector>
 #include <algorithm>
 #include <optional>
+#include <fstream>
 #include "geometry.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -35,9 +36,10 @@ struct texture
 	
 	void load(const char* path) noexcept
 	{
+		assert(path);
 		int r = -1;
 		stbi_uc* pixmap = stbi_load(path, &width, &height, &r, 0);
-		if (!pixmap || 3 != r)
+		if (!pixmap || r != 3)
 			std::cerr << "texture load error : " <<  r;
 		
 		data.resize(width * height);
@@ -45,7 +47,9 @@ struct texture
 		{
 			for (int i = 0; i < width; i++) 
 			{
-				data[i + j * width] = vec3f(pixmap[(i + j * width) * 3 + 0], pixmap[(i + j * width) * 3 + 1], pixmap[(i + j * width) * 3 + 2]) * (1 / 255.);
+				data[i + j * width] = vec3f(pixmap[(i + j * width) * 3 + 0], 
+											pixmap[(i + j * width) * 3 + 1], 
+											pixmap[(i + j * width) * 3 + 2]) * (1 / 255.);
 			}
 		}
 		stbi_image_free(pixmap);
@@ -198,7 +202,7 @@ class renderer
 		auto const hInfo = scene_intersect(origin, dir);
 		if (depth > max_depth || !hInfo)
 			return get_env_map_color(origin, dir);
-
+		
 		// reflection
 		color reflect_col = Color::none;
 		if (hInfo->mtrl.reflect > 0.0f)
@@ -235,7 +239,6 @@ class renderer
 			diffuse_light_intensity += light_it.intensity * std::max(0.0f, dot(light_dir, hInfo->normal));
 			specular_light_intensity += light_it.intensity * std::pow(std::max(0.0f, dot(R, -dir)), hInfo->mtrl.specular_exponent);
 		}
-		
 		return	hInfo->mtrl.col * hInfo->mtrl.ka * light::ambient +
 				hInfo->mtrl.col * diffuse_light_intensity * hInfo->mtrl.kd +
 				vec4f(1., 1., 1., 1.) * specular_light_intensity * hInfo->mtrl.ks + 
@@ -289,14 +292,14 @@ class renderer
 
 	color get_env_map_color(vec3f origin, vec3f dir) const noexcept
 	{
-		float const theta = atan2(dir.z, dir.x);
-		float const phi = -atan2(dir.y, sqrt(dir.z * dir.z + dir.x * dir.x));
+		float const phi = atan2(dir.z, dir.x);
+		float const theta = acos(dir.y);
 
-		size_t const x = std::max(std::min((theta + M_PI) / (M_PI * 2) * static_cast<double>(env_map.width), static_cast<double>(env_map.width)), 0.0);
-		size_t const y = std::max(std::min((phi + M_PI) / (M_PI * 2) * static_cast<double>(env_map.height), static_cast<double>(env_map.height)), 0.0);
+		size_t const x = env_map.width * (phi / M_PI + 1) / 2;
+		size_t const y = env_map.height * (theta / M_PI);
 
 		vec3f const col = env_map.data.at(y * env_map.width + x);
-		return color{ col.x, col.y, col.z, 1.0f} ;
+		return color{ col.x, col.y, col.z, 1.0f };
 	}
 
 	void game_boy_pass() noexcept
@@ -373,9 +376,10 @@ class renderer
 	vec3f camDir;
 };
 
+
 int main()
 {
-	renderer render(1280, 720, M_PI/3, "envmap.jpg");
+	renderer render(1280, 720, M_PI/2.5, "envmap.jpg");
 	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
 	render.init_scene();
 	render.render();
