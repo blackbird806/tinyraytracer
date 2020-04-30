@@ -5,7 +5,6 @@
 #include <vector>
 #include <algorithm>
 #include <optional>
-#include <fstream>
 #include "geometry.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -298,7 +297,7 @@ class renderer
 		size_t const x = env_map.width * (phi / M_PI + 1) / 2;
 		size_t const y = env_map.height * (theta / M_PI);
 
-		vec3f const col = env_map.data.at(y * env_map.width + x);
+		vec3f const col = env_map.data[std::clamp<size_t>(y * env_map.width + x, 0, env_map.data.size()-1)];
 		return color{ col.x, col.y, col.z, 1.0f };
 	}
 
@@ -358,7 +357,7 @@ class renderer
 	}
 
 	color clear_color = Color::black;
-	unsigned max_depth = 8;
+	unsigned max_depth = 1;
 	unsigned msaa = 1;
 	
 	private:
@@ -379,12 +378,12 @@ class renderer
 
 int main()
 {
-	renderer render(1280, 720, M_PI/2.5, "envmap.jpg");
+	renderer render(1920, 1080, M_PI/2.5, "envmap.jpg");
 	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
 	render.init_scene();
 	render.render();
 	render.save();
-	render.game_boy_pass();
-	render.save("out gameboy.jpg");
+	//render.game_boy_pass();
+	//render.save("out gameboy.jpg");
 	return 0;
 }
