@@ -16,16 +16,23 @@ struct hit_info
 struct AABB
 {
 	vec3f min{}, max{};
-
+	
 	bool ray_hit(vec3f origin, vec3f dir) const
 	{
+		float tmin = -std::numeric_limits<float>::max();
+		float tmax = std::numeric_limits<float>::max();
 		for (int dim = 0; dim < 3; dim++)
 		{
-			auto const t0 = std::min<float>((min[dim] - origin[dim]) / dir[dim],
-				(max[dim] - origin[dim]) / origin[dim]);
-			auto const t1 = std::max<float>((min[dim] - origin[dim]) / dir[dim],
-				(max[dim] - origin[dim]) / origin[dim]);
-			if (t0 <= t1)
+			auto const invD = 1.0f / dir[dim];
+			auto t0 = (min[dim] - origin[dim]) * invD;
+			auto t1 = (max[dim] - origin[dim]) * invD;
+
+			if (invD < 0.0f)
+				std::swap(t0, t1);
+			
+			tmin = std::max(t0, tmin);
+			tmax = std::min(t1, tmax);
+			if (tmax <= tmin)
 				return false;
 		}
 		return true;
@@ -58,12 +65,13 @@ struct sphere : hittable
 	vec3f pos;
 	float radius;
 	material mtrl;
+	sphere(vec3f p, float r, material m) : pos(p), radius(r), mtrl(m) {}
 	
 	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override
 	{
 		hit_info hinfo;
 		vec3f const f = origin - pos;
-		if (f.norm() < radius)
+		if (f.norm2() < radius * radius)
 			return {};
 
 		float const a = dot(dir, dir);
@@ -122,33 +130,3 @@ struct plan
 	}
 };
 
-// @Unused
-struct hittable_list : hittable
-{
-	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override
-	{
-		float dist = std::numeric_limits<float>::max();
-		std::optional<hit_info> result;
-		for (auto const* object : objects)
-		{
-			if (auto hinfo = object->ray_intersect(origin, dir))
-			{
-				float const c_dist = (hinfo->pos - origin).norm2();
-				if (c_dist < dist)
-				{
-					dist = c_dist;
-					result = hinfo;
-				}
-			}
-		}
-		return result;
-	}
-	
-	[[nodiscard]] AABB bounding_box() const noexcept override
-	{
-		assert(false);
-		return {};
-	}
-	
-	std::vector<hittable*> objects;
-};

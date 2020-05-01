@@ -1,38 +1,20 @@
 #pragma once
-#include <vector>
-#include "gsl/span"
+#include <memory>
 #include "shapes.h"
+#include "gsl/span"
 
-class BVH : hittable
+struct BVH_node : hittable
 {
-	struct node : hittable
-	{
-		node(BVH& p, gsl::span<hittable> hittables) noexcept;
+	BVH_node() = default;
+	BVH_node(gsl::span<std::shared_ptr<hittable>> hittables) noexcept;
+	void create(gsl::span<std::shared_ptr<hittable>> hittables) noexcept;
 
-		[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override;
-		[[nodiscard]] AABB bounding_box() const noexcept override
+	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override;
+	[[nodiscard]] AABB bounding_box() const noexcept override
 		{
 				return box;
 		}
-		
-		AABB box;
-		BVH* parent;
-		hittable* left = nullptr, *right = nullptr;
-	};
-
-	explicit BVH(gsl::span<hittable> const& hittables) noexcept;
-
-	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override
-	{
-		return root.ray_intersect(origin, dir);
-	}
 	
-	[[nodiscard]] AABB bounding_box() const noexcept override
-	{
-		return root.bounding_box();
-	}
-
-	
-	std::vector<node> nodes;
-	node root;
+	AABB box;
+	std::shared_ptr<hittable> left = nullptr, right = nullptr;
 };

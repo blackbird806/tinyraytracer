@@ -5,10 +5,12 @@
 #include <vector>
 #include <algorithm>
 #include <optional>
+#include <random>
+#include <chrono>
+#define STB_IMAGE_IMPLEMENTATION
 #include "geometry.h"
 #include "shapes.h"
 #include "color.h"
-
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #include "scene.h"
@@ -22,44 +24,10 @@ class renderer
 	{
 		env_map.load(env_map_path);
 	}
-
-	// return the closest hitpoint 
-	[[nodiscard]] std::optional<hit_info> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
-	{
-		std::optional<hit_info> result;
-		float dist = std::numeric_limits<float>::max();
-		for (auto const& sphere : spheres)
-		{
-			if (auto const hInfo = sphere.ray_intersect(origin, dir))
-			{
-				float const c_dist = (hInfo->pos - origin).norm2();
-				if (c_dist < dist)
-				{
-					dist = c_dist;
-					result = hInfo;
-				}
-			}
-		}
-		
-		for (auto const& plan : plans)
-		{
-			if (auto const hInfo = plan.ray_intersect(origin, dir))
-			{
-				float const c_dist = (hInfo->pos - origin).norm2();
-				if (c_dist < dist)
-				{
-					dist = c_dist;
-					result = hInfo;
-				}
-			}
-		}
-		
-		return result;
-	}
 	 
 	[[nodiscard]] color cast_ray(vec3f const& origin, vec3f const& dir, unsigned depth = 0) noexcept
 	{
-		auto const hInfo = scene_intersect(origin, dir);
+		auto const hInfo = render_scene.intersect(origin, dir);
 		if (depth > max_depth || !hInfo)
 			return get_env_map_color(origin, dir);
 		
@@ -82,13 +50,13 @@ class renderer
 		}
 		
 		float diffuse_light_intensity = 0, specular_light_intensity = 0;
-		for (auto const& light_it : lights)
+		for (auto const& light_it : render_scene.lights)
 		{
 			vec3f const light_dir = (light_it.pos - hInfo->pos).normalize();
 			
 			// shadows
 			vec3f const shadow_start = dot(light_dir, hInfo->normal) < 0 ? hInfo->pos - hInfo->normal * 1e-3 : hInfo->pos + hInfo->normal * 1e-3;
-			if (auto const& shadow_hit = scene_intersect(shadow_start, light_dir))
+			if (auto const& shadow_hit = render_scene.intersect(shadow_start, light_dir))
 			{
 				if ((shadow_start - shadow_hit->pos).norm2() <= (shadow_start - light_it.pos).norm2())
 					continue;
@@ -113,21 +81,23 @@ class renderer
 		material const blue_rubber = { color{0.1,  0.1, 0.6, 1.0f},	0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
 		material const yellow_rubber = { color{0.4,  0.4, 0.1, 1.0f}, 0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
 		material const     mirror = { color{ 1.0, 1.0, 1.0, 1.0f},	0.15, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
-		spheres.emplace_back(vec3f(0, 8, -30), 8, mirror);
-		spheres.emplace_back(vec3f(7, 4, -18), 4, mirror);
-		spheres.emplace_back(vec3f(-3, -0.5, -16), 2, red_rubber);
-		spheres.emplace_back(vec3f(-1, -1.5, -12), 2, glass);
-		spheres.emplace_back(vec3f(1.5, -0.5, -20), 3, ivory);
-		spheres.emplace_back(vec3f(-14, -0.5, -20), 3, red_rubber);
-		//plans.emplace_back(vec3f(0, -10, 0), vec3f(0, 1, 0), blue_rubber);
 
-		lights.emplace_back(vec3f(-20, 20, 20), 1.5);
-		lights.emplace_back(vec3f(30, 50, -25), 1.8);
-		lights.emplace_back(vec3f(0, 0, 0), 1.7);
+		std::random_device rd{};
+		std::mt19937       gen{ rd() };
+		std::normal_distribution<float>       xzd{ 1.f, 2.f };
+		std::normal_distribution<float>       yd{ 1.f, 2.f };
+		std::uniform_real_distribution<float> radd{ .1f, .7f };
+
+		for (int i = 0; i < 400; i++)
+		{
+			render_scene.objects.push_back(std::make_shared<sphere>(vec3f(sin(i) * 5, cos(i) * 5, -i), 0.5, red_rubber));
+		}
+		render_scene.lights.emplace_back(vec3f(-20, 20, 20), 1.5);
 	}
 
 	void render() noexcept
 	{
+		render_scene.create_acceleration_structure();
 		float const tf2 = tanf(fov / 2.0f);
 		#pragma loop(hint_parallel(8))
 		for (size_t i = 0; i < height; i++)
@@ -223,12 +193,9 @@ class renderer
 	
 	private:
 
+	scene render_scene;
 	texture env_map;
-	
-	std::vector<plan> plans;
-	std::vector<sphere> spheres;
-	
-	std::vector<light> lights;
+
 	std::vector<color> image;
 	size_t width, height;
 	float fov;
@@ -241,9 +208,13 @@ int main()
 	renderer render(1920, 1080, M_PI/2.5, "envmap.jpg");
 	render.clear_color = {0.7f, 0.7f, 0.7f , 1.0f};
 	render.init_scene();
+	
+	auto const start = std::chrono::steady_clock::now();
 	render.render();
+	auto const end = std::chrono::steady_clock::now();
+	
+	std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count() << " s" << std::endl;
 	render.save();
-	//render.game_boy_pass();
-	//render.save("out gameboy.jpg");
+	std::cin.get();
 	return 0;
 }

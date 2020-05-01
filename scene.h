@@ -1,6 +1,9 @@
 #pragma once
 #include <vector>
+#include "BVH.h"
 #include "shapes.h"
+
+#define USE_BVH
 
 struct light
 {
@@ -12,13 +15,21 @@ struct light
 
 struct scene
 {
-	[[nodiscard]] std::optional<hit_info> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
+	void create_acceleration_structure()
 	{
+		bvh.create(objects);
+	}
+	
+	[[nodiscard]] std::optional<hit_info> intersect(vec3f const& origin, vec3f const& dir) const noexcept
+	{
+#ifdef USE_BVH
+		return bvh.ray_intersect(origin, dir);
+#else	
 		std::optional<hit_info> result;
 		float dist = std::numeric_limits<float>::max();
 		for (auto const& object : objects)
 		{
-			if (auto const hInfo = object.ray_intersect(origin, dir))
+			if (auto const hInfo = object->ray_intersect(origin, dir))
 			{
 				float const c_dist = (hInfo->pos - origin).norm2();
 				if (c_dist < dist)
@@ -30,8 +41,10 @@ struct scene
 		}
 		
 		return result;
+#endif
 	}
-	
+
+	BVH_node bvh;
 	std::vector<light> lights;
-	std::vector<hittable> objects;
+	std::vector<std::shared_ptr<hittable>> objects;
 };
