@@ -82,17 +82,23 @@ class renderer
 		material const yellow_rubber = { color{0.4,  0.4, 0.1, 1.0f}, 0.15, 0.9, 0.3, 0.0, 0.0, 1.0,10. };
 		material const     mirror = { color{ 1.0, 1.0, 1.0, 1.0f},	0.15, 0.0, 0.9, 0.0,0.8, 1.0,1425. };
 
+		material mtrls[] = { ivory , glass , red_rubber, blue_rubber, yellow_rubber, mirror };
+		
 		std::random_device rd{};
 		std::mt19937       gen{ rd() };
-		std::normal_distribution<float>       xzd{ 1.f, 2.f };
-		std::normal_distribution<float>       yd{ 1.f, 2.f };
-		std::uniform_real_distribution<float> radd{ .1f, .7f };
+		std::uniform_int_distribution<>			m{ 0, std::size(mtrls)-1};
+		std::normal_distribution<float>			xzd{ 1.f, 2.f };
+		std::normal_distribution<float>			yd{ 1.f, 2.f };
+		std::uniform_real_distribution<float>	radd{ .1f, .7f };
 
-		for (int i = 0; i < 400; i++)
+		for (int i = 0; i < 40; i++)
 		{
-			render_scene.objects.push_back(std::make_shared<sphere>(vec3f(sin(i) * 5, cos(i) * 5, -i), 0.5, red_rubber));
+			render_scene.objects.push_back(std::make_shared<sphere>(vec3f(sin(i) * 3, cos(i) * 3, -i), 0.5, mtrls[m(gen)]));
 		}
+		
 		render_scene.lights.emplace_back(vec3f(-20, 20, 20), 1.5);
+		render_scene.lights.emplace_back(vec3f(30, 50, -25), 1.8);
+		render_scene.lights.emplace_back(vec3f(0, 0, 0), 1.7);
 	}
 
 	void render() noexcept
@@ -215,6 +221,6 @@ int main()
 	
 	std::cout << std::chrono::duration_cast<std::chrono::duration<double>>(end - start).count() << " s" << std::endl;
 	render.save();
-	std::cin.get();
+	//std::cin.get();
 	return 0;
 }
