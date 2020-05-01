@@ -52,6 +52,16 @@ template<size_t DIM,typename T>vec<DIM,T> operator+(vec<DIM,T> lhs, const vec<DI
     return lhs;
 }
 
+template<size_t DIM, typename T>vec<DIM, T> operator+(vec<DIM, T> lhs, const T& rhs) {
+	for (size_t i = DIM; i--; lhs[i] += rhs);
+	return lhs;
+}
+
+template<size_t DIM, typename T>vec<DIM, T> operator-(vec<DIM, T> lhs, const T& rhs) {
+	for (size_t i = DIM; i--; lhs[i] -= rhs);
+	return lhs;
+}
+
 template<size_t DIM,typename T>vec<DIM,T> operator-(vec<DIM,T> lhs, const vec<DIM,T>& rhs) {
     for (size_t i=DIM; i--; lhs[i]-=rhs[i]);
     return lhs;

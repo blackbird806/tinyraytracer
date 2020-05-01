@@ -6,151 +6,12 @@
 #include <algorithm>
 #include <optional>
 #include "geometry.h"
+#include "shapes.h"
+#include "color.h"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-#define STB_IMAGE_IMPLEMENTATION
-#include "stb_image.h"
-
-#define NOP [](){}()
-
-using color = vec4f;
-
-namespace Color
-{
-	const color black = { 0.0f, 0.0f, 0.0f, 1.0f };
-	const color none = { 0.0f, 0.0f, 0.0f, 0.0f };
-	const color red = { 1.0f, 0, 0, 1.0f };
-	const color blue = { 0, 0, 1.0f, 1.0f };
-	const color green = { 0, 1.0f, 0, 1.0f };
-	const color yellow = { 1.0f, 1.0f, 0, 1.0f };
-	const color orange = { 1.0f, 0.0f, 1.0, 1.0f };
-	const color white = { 1.0f, 1.0f, 1.0f, 1.0f };
-}
-
-struct texture
-{
-	int width, height;
-	std::vector<vec3f> data;
-	
-	void load(const char* path) noexcept
-	{
-		assert(path);
-		int r = -1;
-		stbi_uc* pixmap = stbi_load(path, &width, &height, &r, 0);
-		if (!pixmap || r != 3)
-			std::cerr << "texture load error : " <<  r;
-		
-		data.resize(width * height);
-		for (int j = height - 1; j >= 0; j--) 
-		{
-			for (int i = 0; i < width; i++) 
-			{
-				data[i + j * width] = vec3f(pixmap[(i + j * width) * 3 + 0], 
-											pixmap[(i + j * width) * 3 + 1], 
-											pixmap[(i + j * width) * 3 + 2]) * (1 / 255.);
-			}
-		}
-		stbi_image_free(pixmap);
-	}
-
-};
-
-struct light
-{
-	light(vec3f p, float in) noexcept : pos(p), intensity(in) {};
-	vec3f pos;
-	float intensity;
-	static constexpr float ambient = 0.0;
-};
-
-struct material
-{
-	color col;
-	float ka, kd, ks, kr;
-	float reflect = 0.0f;
-	float refraction_index = 0.0f;
-	float specular_exponent = 10.f;
-};
-
-struct hitInfo
-{
-	vec3f pos;
-	vec3f normal;
-	material mtrl;
-};
-
-struct drawable
-{
-	material mtrl;
-};
-
-struct sphere : drawable
-{
-	vec3f pos;
-	float radius;
-
-	sphere(vec3f const& p, float r, color const& c = Color::green) noexcept : drawable{ material{c} }, pos(p), radius(r) {}
-	sphere(vec3f const& p, float r, material const& m) noexcept : drawable{m}, pos(p), radius(r) {}
-
-	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
-	{
-		hitInfo hinfo;
-		vec3f const f = origin - pos;
-		if (f.norm() < radius)
-			return {};
-
-		float const a = dot(dir, dir);
-		float const b = 2 * dot(dir, f);
-		float const c = dot(f, f) - radius * radius;
-		float const delta = b * b - 4 * a * c;
-		if (delta <= 0.0f)
-			return {};
-		float const sdelta = sqrt(delta);
-		float t0 = (-b + sdelta) / 2.0f;
-		float t1 = (-b - sdelta) / 2.0f;
-		if (t0 > t1)
-			std::swap(t0, t1);
-		if (t0 < 0) {
-			t0 = t1; // if t0 is negative, let's use t1 instead 
-			if (t0 < 0) return {}; // both t0 and t1 are negative
-		}
-		float const t = t0;
-		hinfo.pos = origin + dir * t;
-		hinfo.normal = (hinfo.pos - pos).normalize();
-		hinfo.mtrl = mtrl;
-		return hinfo;
-	}
-};
-
-struct plan : drawable
-{
-	plan(vec3f const& p, vec3f const& n, material const& m) noexcept : drawable{m}, pos(p), normal(n) { }
-
-	[[nodiscard]] std::optional<hitInfo> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
-	{
-		float const d = dot(-normal, dir);
-		if (d > FLT_EPSILON)
-		{
-			vec3f const p = pos - origin;
-			float const t = dot(p, -normal) / d;
-			
-			if (t < 0)
-				return {};
-			
-			hitInfo result;
-			result.pos = origin + dir * t;
-			result.normal = normal;
-			result.mtrl = mtrl;
-
-			return {result};
-		}
-		return {};
-	}
-	
-	vec3f pos;
-	vec3f normal;
-};
+#include "scene.h"
 
 class renderer
 {
@@ -163,9 +24,9 @@ class renderer
 	}
 
 	// return the closest hitpoint 
-	[[nodiscard]] std::optional<hitInfo> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
+	[[nodiscard]] std::optional<hit_info> scene_intersect(vec3f const& origin, vec3f const& dir) noexcept
 	{
-		std::optional<hitInfo> result;
+		std::optional<hit_info> result;
 		float dist = std::numeric_limits<float>::max();
 		for (auto const& sphere : spheres)
 		{
@@ -374,7 +235,6 @@ class renderer
 	vec3f camPos;
 	vec3f camDir;
 };
-
 
 int main()
 {
