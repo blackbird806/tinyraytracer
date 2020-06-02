@@ -91,11 +91,14 @@ class renderer
 		std::normal_distribution<float>			yd{ 1.f, 2.f };
 		std::uniform_real_distribution<float>	radd{ .1f, .7f };
 
-		for (int i = 0; i < 40; i++)
+		int constexpr cap = 10;
+		render_scene.objects.reserve(cap);
+		for (int i = 0; i < cap; i++)
 		{
-			render_scene.objects.push_back(std::make_shared<sphere>(vec3f(sin(i) * 3, cos(i) * 3, -i), 0.5, mtrls[m(gen)]));
+			render_scene.objects.push_back(std::make_shared<sphere>(vec3f(sin(i) * 0.5, cos(i) * 0.5, -i * 0.3), 0.25, mtrls[m(gen)]));
 		}
 		
+		render_scene.objects.push_back(std::make_shared<plan>(vec3f(0.0f, -3.0f, 0.0f), vec3f(0.0f, 1.0f, 0.0f), red_rubber));
 		render_scene.lights.emplace_back(vec3f(-20, 20, 20), 1.5);
 		render_scene.lights.emplace_back(vec3f(30, 50, -25), 1.8);
 		render_scene.lights.emplace_back(vec3f(0, 0, 0), 1.7);

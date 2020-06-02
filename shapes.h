@@ -65,7 +65,8 @@ struct sphere : hittable
 	vec3f pos;
 	float radius;
 	material mtrl;
-	sphere(vec3f p, float r, material m) : pos(p), radius(r), mtrl(m) {}
+	
+	sphere(vec3f p, float r, material const& m) : pos(p), radius(r), mtrl(m) {}
 	
 	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override
 	{
@@ -101,14 +102,15 @@ struct sphere : hittable
 	}
 };
 
-// @TODO convert to quad
-struct plan
+struct plan : hittable
 {
 	vec3f pos;
 	vec3f normal;
 	material mtrl;
+
+	plan(vec3f p, vec3f n, material const& mat) : pos(p), normal(n), mtrl(mat) {}
 	
-	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept
+	[[nodiscard]] std::optional<hit_info> ray_intersect(vec3f const& origin, vec3f const& dir) const noexcept override
 	{
 		float const d = dot(-normal, dir);
 		if (d > FLT_EPSILON)
@@ -127,6 +129,12 @@ struct plan
 			return { result };
 		}
 		return {};
+	}
+
+	// plan is infinite
+	[[nodiscard]] AABB bounding_box() const noexcept override
+	{
+		return AABB{ vec3f(-FLT_MAX, -FLT_MAX, -FLT_MAX), vec3f(FLT_MAX, FLT_MAX, FLT_MAX) };
 	}
 };
 
