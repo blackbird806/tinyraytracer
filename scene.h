@@ -10,7 +10,7 @@ struct light
 	light(vec3f p, float in) noexcept : pos(p), intensity(in) {};
 	vec3f pos;
 	float intensity;
-	static constexpr float ambient = 0.0;
+	static constexpr float ambient = 0.25f;
 };
 
 struct scene

@@ -4,6 +4,12 @@
 #include <cassert>
 #include <iostream>
 
+#define GEN_ASSIGN_OP(S, OP) \
+	constexpr vec operator OP(vec const& rhs) {\
+	for (size_t i = S; i--; (*this)[i] OP rhs[i]);\
+	return *this;\
+	}
+
 template <size_t DIM, typename T> struct vec {
     vec() { for (size_t i=DIM; i--; data_[i] = T()); }
           T& operator[](const size_t i)       { assert(i<DIM); return data_[i]; }
@@ -44,6 +50,7 @@ template <typename T> struct vec<4,T> {
 	float norm2() const { return (x * x + y * y + z * z + w * w); }
           T& operator[](const size_t i)       { assert(i<4); return i<=0 ? x : (1==i ? y : (2==i ? z : w)); }
     const T& operator[](const size_t i) const { assert(i<4); return i<=0 ? x : (1==i ? y : (2==i ? z : w)); }
+	GEN_ASSIGN_OP(4, +=)
     T x,y,z,w;
 };
 
@@ -71,6 +78,12 @@ template<size_t DIM,typename T,typename U> vec<DIM,T> operator*(const vec<DIM,T>
     vec<DIM,T> ret;
     for (size_t i=DIM; i--; ret[i]=lhs[i]*rhs);
     return ret;
+}
+
+template<size_t DIM, typename T, typename U> vec<DIM, T> operator/(const vec<DIM, T>& lhs, const U& rhs) {
+	vec<DIM, T> ret;
+	for (size_t i = DIM; i--; ret[i] = lhs[i] / rhs);
+	return ret;
 }
 
 template<size_t DIM, typename T, typename U> vec<DIM, T> operator*(const U& rhs, const vec<DIM, T>& lhs) {
@@ -131,5 +144,7 @@ auto lerp(T from, T to, float t)
 {
     return (1 - t) * from + t * to;
 }
+
+#undef GEN_ASSIGN_OP
 
 #endif //__GEOMETRY_H__
